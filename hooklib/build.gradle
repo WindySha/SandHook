@@ -39,14 +39,14 @@ dependencies {
     api project(':annotation')
 }
 
-apply plugin: 'com.novoda.bintray-release'
-
-publish {
-    userOrg = rootProject.userOrg
-    groupId = rootProject.groupId
-    artifactId = 'hooklib'
-    publishVersion = rootProject.publishVersion
-    desc = rootProject.desc
-    website = rootProject.website
-    licences = rootProject.licences
-}
+//apply plugin: 'com.novoda.bintray-release'
+//
+//publish {
+//    userOrg = rootProject.userOrg
+//    groupId = rootProject.groupId
+//    artifactId = 'hooklib'
+//    publishVersion = rootProject.publishVersion
+//    desc = rootProject.desc
+//    website = rootProject.website
+//    licences = rootProject.licences
+//}
