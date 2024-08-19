@@ -1,6 +1,7 @@
 package com.swift.sandhook;
 
 import android.os.Build;
+import android.util.Log;
 
 import com.swift.sandhook.annotation.HookMode;
 import com.swift.sandhook.blacklist.HookBlackList;
@@ -92,12 +93,17 @@ public class SandHook {
             throw new HookErrorException("method <" + entity.target.toString() + "> can not hook, because of in blacklist!");
 
 
+        Log.e("xiawanli", " SandHookConfig.delayHook = " + SandHookConfig.delayHook);
+        Log.e("xiawanli", " PendingHookHandler.canWork() = " + PendingHookHandler.canWork());
+        Log.e("xiawanli", " ClassStatusUtils.isStaticAndNoInited(entity.target) = " + ClassStatusUtils.isStaticAndNoInited(entity.target));
         if (SandHookConfig.delayHook && PendingHookHandler.canWork() && ClassStatusUtils.isStaticAndNoInited(entity.target)) {
+            Log.e("xiawanli", "  start pending hook!!!! name -> " + entity.target.getName());
+
             PendingHookHandler.addPendingHook(entity);
             return;
         } else if (entity.initClass) {
-            resolveStaticMethod(target);
-            MakeInitializedClassVisibilyInitialized(getThreadId());
+//            resolveStaticMethod(target);
+//            MakeInitializedClassVisibilyInitialized(getThreadId());
         }
 
         resolveStaticMethod(backup);
@@ -384,6 +390,7 @@ public class SandHook {
     public static native void skipAllSafeCheck(boolean skip);
 
     private static native int hookMethod(Member originMethod, Method hookMethod, Method backupMethod, int hookMode);
+    public static native void printMethodInfo(Member originMethod);
 
     public static native void ensureMethodCached(Method hook, Method backup);
     public static native void ensureDeclareClass(Member origin, Method backup);

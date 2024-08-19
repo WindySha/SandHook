@@ -1,5 +1,7 @@
 package com.swift.sandhook;
 
+import android.util.Log;
+
 import com.swift.sandhook.wrapper.HookErrorException;
 import com.swift.sandhook.wrapper.HookWrapper;
 
@@ -14,19 +16,29 @@ public class PendingHookHandler {
     private static Map<Class, Vector<HookWrapper.HookEntity>> pendingHooks = new ConcurrentHashMap<>();
 
     private static boolean canUsePendingHook;
+    private static boolean hasInited = false;
 
-    static {
-        //init native hook
-        if (SandHookConfig.delayHook) {
-            canUsePendingHook = SandHook.initForPendingHook();
-        }
-    }
+//    static {
+//        //init native hook
+//        if (SandHookConfig.delayHook) {
+//            canUsePendingHook = SandHook.initForPendingHook();
+//        }
+//    }
 
     public static boolean canWork() {
-        return canUsePendingHook && SandHook.canGetObject() && !SandHookConfig.DEBUG;
+        if (SandHookConfig.delayHook && !hasInited) {
+            canUsePendingHook = SandHook.initForPendingHook();
+            hasInited = true;
+        }
+//        return canUsePendingHook && SandHook.canGetObject() && !SandHookConfig.DEBUG;
+        return false;
     }
 
     public static synchronized void addPendingHook(HookWrapper.HookEntity hookEntity) {
+        if (SandHookConfig.delayHook && !hasInited) {
+            canUsePendingHook = SandHook.initForPendingHook();
+            hasInited = true;
+        }
         Vector<HookWrapper.HookEntity> entities = pendingHooks.get(hookEntity.target.getDeclaringClass());
         if (entities == null) {
             entities = new Vector<>();
@@ -39,6 +51,7 @@ public class PendingHookHandler {
         if (clazz_ptr == 0)
             return;
         Class clazz = (Class) SandHook.getObject(clazz_ptr);
+        Log.e("xiawanli", " onClassInit is called, clazz = " +clazz);
         if (clazz == null)
             return;
         Vector<HookWrapper.HookEntity> entities = pendingHooks.get(clazz);

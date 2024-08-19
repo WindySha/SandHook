@@ -31,6 +31,7 @@ public class MyApp extends Application {
         super.onCreate();
 
         SandHookConfig.DEBUG = BuildConfig.DEBUG;
+//        SandHookConfig.DEBUG = false;
 
         if (Build.VERSION.SDK_INT == 29 && getPreviewSDKInt() > 0) {
             // Android R preview

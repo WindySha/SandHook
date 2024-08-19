@@ -11,6 +11,8 @@
 #include "../includes/art_runtime.h"
 #include "../includes/offset.h"
 #include "../includes/classlinker_offset_helper.h"
+#include <unordered_set>
+#include <mutex>
 
 extern int SDK_INT;
 
@@ -44,6 +46,7 @@ extern "C" {
     bool (*origin_ShouldUseInterpreterEntrypoint)(ArtMethod *artMethod, const void* quick_code) = nullptr;
     bool replace_ShouldUseInterpreterEntrypoint(ArtMethod *artMethod, const void* quick_code) {
         if (SandHook::TrampolineManager::get().methodHooked(artMethod) && quick_code != nullptr) {
+            LOGE("xiawanli   ShouldUseInterpreterEntrypoint called");
             return false;
         }
         return origin_ShouldUseInterpreterEntrypoint(artMethod, quick_code);
@@ -61,7 +64,11 @@ extern "C" {
 
     void (*backup_fixup_static_trampolines)(void *, void *) = nullptr;
 
+    void (*backup_fixup_static_trampolines_with_thread)(void *, void *, void*) = nullptr;
+    void (*backup_InitializeMethodsCode)(void *thiz, void *self, const void *quick_code) = nullptr;
+
     void *(*backup_mark_class_initialized)(void *, void *, uint32_t *) = nullptr;
+    bool (*backup_InitializeClass)(void *, void *, uint32_t *, bool, bool) = nullptr;
 
     void (*backup_update_methods_code)(void *, ArtMethod *, const void *) = nullptr;
 
@@ -74,18 +81,24 @@ extern "C" {
         env->GetJavaVM(&jvm);
 
         if (BYTE_POINT == 8) {
-            if (SDK_INT >= ANDROID_Q) {
-                art_lib_path = "/lib64/libart.so";
-                jit_lib_path = "/lib64/libart-compiler.so";
+            if (SDK_INT >= ANDROID_R) {
+                art_lib_path = "/apex/com.android.art/lib64/libart.so";
+                jit_lib_path = "/apex/com.android.art/lib64/libart-compiler.so";
+            } else if (SDK_INT >= ANDROID_Q) {
+                art_lib_path = "/apex/com.android.runtime/lib64/libart.so";
+                jit_lib_path = "/apex/com.android.runtime/lib64/libart-compiler.so";
             } else {
                 art_lib_path = "/system/lib64/libart.so";
                 jit_lib_path = "/system/lib64/libart-compiler.so";
             }
         } else {
-            if (SDK_INT >= ANDROID_Q) {
-                art_lib_path = "/lib/libart.so";
-                jit_lib_path = "/lib/libart-compiler.so";
-             } else {
+            if (SDK_INT >= ANDROID_R) {
+                art_lib_path = "/apex/com.android.art/lib/libart.so";
+                jit_lib_path = "/apex/com.android.art/lib/libart-compiler.so";
+            } else if (SDK_INT >= ANDROID_Q) {
+                art_lib_path = "/apex/com.android.runtime/lib/libart.so";
+                jit_lib_path = "/apex/com.android.runtime/lib/libart-compiler.so";
+            } else {
                 art_lib_path = "/system/lib/libart.so";
                 jit_lib_path = "/system/lib/libart-compiler.so";
             }
@@ -179,6 +192,7 @@ extern "C" {
             }
             void *shouldUseInterpreterEntrypoint = getSymCompat(art_lib_path,
                                                                 "_ZN3art11ClassLinker30ShouldUseInterpreterEntrypointEPNS_9ArtMethodEPKv");
+            LOGE(" start ShouldUseInterpreterEntrypoint hook shouldUseInterpreterEntrypoint=%p", shouldUseInterpreterEntrypoint);
             if (shouldUseInterpreterEntrypoint != nullptr) {
                 origin_ShouldUseInterpreterEntrypoint = reinterpret_cast<bool (*)(ArtMethod *,
                                                                                   const void *)>(hook_native(
@@ -246,6 +260,22 @@ extern "C" {
         return __get_tls()[TLS_SLOT_ART_THREAD];
     }
 
+std::unordered_set<ArtMethod *> pending_methods;
+std::mutex pending_mutex;
+void addPendingHookNative(ArtMethod *method) {
+    LOGE(" addPendingHookNative method = %p", method);
+    std::unique_lock<std::mutex> lk(pending_mutex);
+    pending_methods.insert(method);
+}
+
+bool isPending(ArtMethod *method) {
+    LOGE(" isPending method = %p", method);
+
+    std::unique_lock<std::mutex> lk(pending_mutex);
+    return pending_methods.find(method) != pending_methods.end();
+//    return pending_methods.erase(method);
+}
+
     jobject getJavaObject(JNIEnv* env, void* thread, void* address) {
         if (addWeakGlobalRef == nullptr)
             return nullptr;
@@ -256,6 +286,16 @@ extern "C" {
 
         jobject result = env->NewLocalRef(object);
         env->DeleteWeakGlobalRef(object);
+
+        jclass clazz = env->FindClass("java/lang/Class");
+//        if (env->IsInstanceOf(result, clazz)) {
+//            jmethodID mid = env->GetMethodID(clazz, "getName", "()Ljava/lang/String;");
+//            jstring name = (jstring)env->CallObjectMethod(result, mid);
+//            jboolean isCopy;
+//            auto name_str = env->GetStringUTFChars(name, &isCopy);
+//            LOGE(" xiawanli getJavaObject class name = %s", name_str);
+//            env->ReleaseStringUTFChars(name, name_str);
+//        }
 
         return result;
     }
@@ -326,21 +366,51 @@ extern "C" {
 
     void replaceFixupStaticTrampolines(void *thiz, void *clazz_ptr) {
         backup_fixup_static_trampolines(thiz, clazz_ptr);
+        LOGE(" xiawanli --- replaceFixupStaticTrampolines ");
         if (class_init_callback) {
             class_init_callback(clazz_ptr);
         }
     }
 
+    void replaceFixupStaticTrampolinesWithThread(void *thiz, void *self, void *clazz_ptr) {
+        LOGE(" xiawanli --- replaceFixupStaticTrampolinesWithThread ");
+        backup_fixup_static_trampolines_with_thread(thiz, self, clazz_ptr);
+        if (class_init_callback) {
+            class_init_callback(clazz_ptr);
+        }
+    }
+
+void replaceInitializeMethodsCode(void *thiz, void *art_method, const void *quick_code) {
+    LOGE(" xiawanli --- replaceInitializeMethodsCode ");
+    if (SandHook::TrampolineManager::get().methodHooked((ArtMethod*)art_method) || isPending((ArtMethod*)art_method)) {
+        LOGE(" xiawanli --- replaceInitializeMethodsCode skiped!!!");
+        return; //skip
+    }
+    backup_InitializeMethodsCode(thiz, art_method, quick_code);
+}
+
     void *replaceMarkClassInitialized(void * thiz, void * self, uint32_t * clazz_ptr) {
         auto result = backup_mark_class_initialized(thiz, self, clazz_ptr);
+        LOGE(" xiawanli --- replaceMarkClassInitialized ");
         if (class_init_callback) {
             class_init_callback(reinterpret_cast<void*>(*clazz_ptr));
         }
         return result;
     }
 
+bool replaceInitializeClass(void *thiz, void *self, uint32_t *clazz_ptr, bool can_init_statics, bool can_init_parents) {
+    auto result = backup_InitializeClass(thiz, self, clazz_ptr, can_init_statics, can_init_parents);
+    LOGE(" xiawanli --- replaceInitializeClass ");
+    if (class_init_callback) {
+        class_init_callback(reinterpret_cast<void *>(*clazz_ptr));
+    }
+    return result;
+}
+
     void replaceUpdateMethodsCode(void *thiz, ArtMethod * artMethod, const void *quick_code) {
-        if (SandHook::TrampolineManager::get().methodHooked(artMethod)) {
+        LOGE(" xiawanli --- replaceUpdateMethodsCodeImpl ");
+        if (SandHook::TrampolineManager::get().methodHooked(artMethod) || isPending((ArtMethod*)artMethod)) {
+            LOGE(" xiawanli --- replaceUpdateMethodsCodeImpl skiped!!!");
             return; //skip
         }
         backup_update_methods_code(thiz, artMethod, quick_code);
@@ -379,7 +449,44 @@ extern "C" {
             make_initialized_classes_visibly_initialized_ = reinterpret_cast<void* (*)(void*, void*, bool)>(
                     getSymCompat(art_lib_path, "_ZN3art11ClassLinker40MakeInitializedClassesVisiblyInitializedEPNS_6ThreadEb"));
 
-            if (backup_mark_class_initialized && backup_update_methods_code) {
+            if (void *symFixupStaticTrampolines = getSymCompat(art_lib_path,
+                                                               "_ZN3art11ClassLinker22FixupStaticTrampolinesENS_6ObjPtrINS_6mirror5ClassEEE")) {
+                LOGE(" xiawanli  symFixupStaticTrampolines = %p", symFixupStaticTrampolines);
+                backup_fixup_static_trampolines = reinterpret_cast<void (*)(void *, void *)>(hook_native(
+                        symFixupStaticTrampolines, (void *) replaceFixupStaticTrampolines));
+            }
+
+            if (void *symInitializeClass = getSymCompat(art_lib_path,
+                                                        "_ZN3art11ClassLinker15InitializeClassEPNS_6ThreadENS_6HandleINS_6mirror5ClassEEEbb")) {
+                LOGE(" xiawanli  symInitializeClass = %p", symInitializeClass);
+                backup_InitializeClass = reinterpret_cast<bool (*)(void *, void *, uint32_t*, bool, bool)>(hook_native(
+                        symInitializeClass, (void *) replaceInitializeClass));
+            }
+
+
+            if (void *symFixupStaticTrampolinesWithThread = getSymCompat(art_lib_path,
+                                                                         "_ZN3art11ClassLinker22FixupStaticTrampolinesEPNS_6ThreadENS_6ObjPtrINS_6mirror5ClassEEE")) {
+                LOGE(" xiawanli  symFixupStaticTrampolinesWithThread = %p", symFixupStaticTrampolinesWithThread);
+
+                backup_fixup_static_trampolines_with_thread = reinterpret_cast<void (*)(void *,void *, void*)>(hook_native(
+                        symFixupStaticTrampolinesWithThread, (void *) replaceFixupStaticTrampolinesWithThread));
+            }
+
+            void *symInitializeMethodsCode = getSymCompat(art_lib_path,
+                                                                             "_ZN3art15instrumentation15Instrumentation21InitializeMethodsCodeEPNS_9ArtMethodEPKv");
+            LOGE(" xiawanli  symInitializeMethodsCode = %p",
+                 symInitializeMethodsCode);
+
+            if (symInitializeMethodsCode) {
+                backup_InitializeMethodsCode = reinterpret_cast<void (*)(void *, void *, const void*)>(hook_native(
+                        symInitializeMethodsCode,
+                        (void *) replaceInitializeMethodsCode));
+            }
+
+
+
+
+            if (backup_mark_class_initialized && backup_update_methods_code && (backup_fixup_static_trampolines_with_thread || backup_fixup_static_trampolines)) {
                 class_init_callback = callback;
                 return true;
             } else {

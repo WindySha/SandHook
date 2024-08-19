@@ -14,10 +14,13 @@ import android.widget.TextView;
 import com.swift.sandhook.test.Inter;
 import com.swift.sandhook.test.InterImpl;
 import com.swift.sandhook.test.PendingHookTest;
+import com.swift.sandhook.test.StaticMethodHook;
 import com.swift.sandhook.test.TestClass;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 
+import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedHelpers;
 
 public class MainActivity extends AppCompatActivity {
@@ -37,10 +40,47 @@ public class MainActivity extends AppCompatActivity {
             public void onClick(View view) {
                 Snackbar.make(view, "Replace with your own action", Snackbar.LENGTH_LONG)
                         .setAction("Action", null).show();
+
+                Method m;
+                try {
+                    m = StaticMethodHook.class.getDeclaredMethod("test");
+                } catch (NoSuchMethodException e) {
+                    throw new RuntimeException(e);
+                }
+                SandHook.printMethodInfo(m);
+                XposedHelpers.findAndHookMethod(StaticMethodHook.class, "test", new XC_MethodHook() {
+                    @Override
+                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                        Log.e("xiawanli", " beforeHookedMethod test");
+                    }
+                });
+                SandHook.printMethodInfo(m);
+
+                Log.e("xiawanli", " start to call  StaticMethodHook.test() !!");
+                StaticMethodHook.test();
+
+                SandHook.printMethodInfo(m);
             }
         });
 
         methodBeHooked(hashCode(), 1);
+
+        XposedHelpers.findAndHookMethod(MainActivity.class, "onResume", new XC_MethodHook() {
+            @Override
+            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                Log.e("xiawanli", " mainActivity onResume is called by hooker !!!");
+            }
+        });
+//        StaticMethodHook.test();
+
+//        XposedHelpers.findAndHookMethod(StaticMethodHook.class, "test", new XC_MethodHook() {
+//            @Override
+//            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+//                Log.e("xiawanli", " beforeHookedMethod test");
+//            }
+//        });
+//
+//        StaticMethodHook.test();
 
 
         toolbar.postDelayed(new Runnable() {
@@ -85,11 +125,11 @@ public class MainActivity extends AppCompatActivity {
         testPluginHook(str);
 
         MyApp.initedTest = true;
-        try {
-            PendingHookTest.test();
-        } catch (Throwable e) {
-
-        }
+//        try {
+//            PendingHookTest.test();
+//        } catch (Throwable e) {
+//
+//        }
     }
 
     public static Field getField(Class topClass, String fieldName) throws NoSuchFieldException {
@@ -151,6 +191,12 @@ public class MainActivity extends AppCompatActivity {
         }
 
         return super.onOptionsItemSelected(item);
+    }
+
+    @Override
+    protected void onResume() {
+        Log.e("xiawanli", " mainActivity onResume");
+        super.onResume();
     }
 }
 

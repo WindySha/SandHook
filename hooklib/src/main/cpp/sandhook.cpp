@@ -94,6 +94,7 @@ bool doHookWithReplacement(JNIEnv* env,
     originMethod->disableInterpreterForO();
     originMethod->disableFastInterpreterForQ();
 
+    LOGE("xiawanli do hook !!!!! originMethod quick entry-> %p  interpreter entry -> %p ", originMethod->getQuickCodeEntry(), originMethod->getInterpreterCodeEntry());
     std::unique_ptr<SandHook::HookTrampoline> hookTrampoline(
             trampolineManager.installReplacementTrampoline(originMethod, hookMethod, backupMethod));
     if (hookTrampoline != nullptr) {
@@ -107,6 +108,7 @@ bool doHookWithReplacement(JNIEnv* env,
             backupMethod->flushCache();
         }
         originMethod->flushCache();
+        LOGE("xiawanli do hook !!!!! after originMethod quick entry-> %p  interpreter entry -> %p ", originMethod->getQuickCodeEntry(), originMethod->getInterpreterCodeEntry());
         return true;
     } else {
         return false;
@@ -170,6 +172,7 @@ extern "C"
 JNIEXPORT jint JNICALL
 Java_com_swift_sandhook_SandHook_hookMethod(JNIEnv *env, jclass type, jobject originMethod,
                                             jobject hookMethod, jobject backupMethod, jint hookMode) {
+    LOGE(" xiawanli start native hookMethod");
 
     art::mirror::ArtMethod* origin = getArtMethod(env, originMethod);
     art::mirror::ArtMethod* hook = getArtMethod(env, hookMethod);
@@ -213,11 +216,13 @@ Java_com_swift_sandhook_SandHook_hookMethod(JNIEnv *env, jclass type, jobject or
     } else {
         isInlineHook = true;
     }
+    LOGE(" isInlineHook = %d", isInlineHook);
 
 
 label_hook:
     //suspend other threads
     SandHook::StopTheWorld stopTheWorld;
+    addPendingHookNative(origin);
     if (isInlineHook && trampolineManager.canSafeInline(origin)) {
         return doHookWithInline(env, origin, hook, backup) ? INLINE : -1;
     } else {
@@ -374,7 +379,9 @@ Java_com_swift_sandhook_SandHook_initForPendingHook(JNIEnv *env, jclass type) {
         attachAndGetEvn()->CallStaticVoidMethod(class_pending_hook, method_class_init, (jlong) clazz_ptr);
         attachAndGetEvn()->ExceptionClear();
     };
-    return static_cast<jboolean>(hookClassInit(class_init_handler));
+    auto result = static_cast<jboolean>(hookClassInit(class_init_handler));
+    LOGE("initForPendingHook result = %d ", result);
+    return result;
 }
 
 extern "C"
@@ -575,4 +582,10 @@ JNIEXPORT bool JNI_Load_Ex(JNIEnv* env, jclass classSandHook, jclass classNeverC
 
     LOGW("JNI Loaded");
     return true;
+}
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_swift_sandhook_SandHook_printMethodInfo(JNIEnv *env, jclass clazz, jobject origin_method) {
+    art::mirror::ArtMethod* origin = getArtMethod(env, origin_method);
+    LOGE("xiawanli  print entry !! quick entry-> %p  interpreter entry -> %p ", origin->getQuickCodeEntry(), origin->getInterpreterCodeEntry());
 }

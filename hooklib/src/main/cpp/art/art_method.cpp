@@ -6,6 +6,7 @@
 #include "../includes/cast_art_method.h"
 #include "../includes/hide_api.h"
 #include "../includes/utils.h"
+#include "log.h"
 
 extern int SDK_INT;
 extern bool DEBUG;
@@ -158,6 +159,7 @@ void ArtMethod::setHotnessCount(uint16_t count) {
 }
 
 bool ArtMethod::compile(JNIEnv* env) {
+    LOGE("xiawanli start compile method, isCompiled = %d", isCompiled());
     if (isCompiled())
         return true;
     //some unknown error when trigger jit for jni method manually

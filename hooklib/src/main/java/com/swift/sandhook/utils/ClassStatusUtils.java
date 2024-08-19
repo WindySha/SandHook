@@ -1,5 +1,7 @@
 package com.swift.sandhook.utils;
 
+import android.util.Log;
+
 import com.swift.sandhook.SandHookConfig;
 
 import java.lang.reflect.Field;
@@ -50,10 +52,13 @@ public class ClassStatusUtils {
         if (fieldStatusOfClass == null)
             return true;
         if (SandHookConfig.SDK_INT >= 30) {
+            Log.e("xiawanli", " getClassStatus(clazz, true) = " + getClassStatus(clazz, true));
             return getClassStatus(clazz, true) >= 14;
         } else if (SandHookConfig.SDK_INT >= 28) {
+            Log.e("xiawanli", " getClassStatus(clazz, true) = " + getClassStatus(clazz, true));
             return getClassStatus(clazz, true) == 14;
         } else if (SandHookConfig.SDK_INT == 27) {
+            Log.e("xiawanli", " getClassStatus(clazz, true) = " + getClassStatus(clazz, false));
             return getClassStatus(clazz, false) == 11;
         } else {
             return getClassStatus(clazz, false) == 10;
