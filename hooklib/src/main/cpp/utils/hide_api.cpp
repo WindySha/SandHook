@@ -11,6 +11,7 @@
 #include "../includes/art_runtime.h"
 #include "../includes/offset.h"
 #include "../includes/classlinker_offset_helper.h"
+#include "../includes/CydiaSubstrate.h"
 
 extern int SDK_INT;
 
@@ -68,6 +69,12 @@ extern "C" {
     void* (*make_initialized_classes_visibly_initialized_)(void*, void*, bool) = nullptr;
 
     void* runtime_instance_ = nullptr;
+
+    static void* CydiaSubstrateInlineHook(void* origin, void* replace) {
+        void* origin_saved = nullptr;
+        MSHookFunction(origin, replace, &origin_saved);
+        return origin_saved;
+    }
 
     void initHideApi(JNIEnv* env) {
 
@@ -166,17 +173,33 @@ extern "C" {
                     "libsandhook-native.so", "SandInlineHook"));
         }
 #endif
-        hook_native = SandInlineHook;
+        // do not use sand hook now, it will cause crashing on some android 14 device
+//        hook_native = SandInlineHook;
+        hook_native = CydiaSubstrateInlineHook;
 
-        if (SDK_INT >= ANDROID_R && hook_native) {
-            const char *symbol_decode_method = sizeof(void*) == 8 ? "_ZN3art3jni12JniIdManager15DecodeGenericIdINS_9ArtMethodEEEPT_m" : "_ZN3art3jni12JniIdManager15DecodeGenericIdINS_9ArtMethodEEEPT_j";
-            void *decodeArtMethod = getSymCompat(art_lib_path, symbol_decode_method);
-            if (art_lib_path != nullptr) {
-                origin_DecodeArtMethodId = reinterpret_cast<ArtMethod *(*)(void *,
-                                                                           jmethodID)>(hook_native(
-                        decodeArtMethod,
-                        reinterpret_cast<void *>(replace_DecodeArtMethodId)));
-            }
+
+
+//        if (SDK_INT >= ANDROID_R && hook_native) {
+//            const char *symbol_decode_method = sizeof(void*) == 8 ? "_ZN3art3jni12JniIdManager15DecodeGenericIdINS_9ArtMethodEEEPT_m" : "_ZN3art3jni12JniIdManager15DecodeGenericIdINS_9ArtMethodEEEPT_j";
+//            void *decodeArtMethod = getSymCompat(art_lib_path, symbol_decode_method);
+//            if (art_lib_path != nullptr) {
+//                origin_DecodeArtMethodId = reinterpret_cast<ArtMethod *(*)(void *,
+//                                                                           jmethodID)>(hook_native(
+//                        decodeArtMethod,
+//                        reinterpret_cast<void *>(replace_DecodeArtMethodId)));
+//            }
+//            void *shouldUseInterpreterEntrypoint = getSymCompat(art_lib_path,
+//                                                                "_ZN3art11ClassLinker30ShouldUseInterpreterEntrypointEPNS_9ArtMethodEPKv");
+//            if (shouldUseInterpreterEntrypoint != nullptr) {
+//                origin_ShouldUseInterpreterEntrypoint = reinterpret_cast<bool (*)(ArtMethod *,
+//                                                                                  const void *)>(hook_native(
+//                        shouldUseInterpreterEntrypoint,
+//                        reinterpret_cast<void *>(replace_ShouldUseInterpreterEntrypoint)));
+//            }
+//        }
+
+        if (SDK_INT >= ANDROID_R && SDK_INT < 33) {
+            // android 13 and above this symbol never exist any more.
             void *shouldUseInterpreterEntrypoint = getSymCompat(art_lib_path,
                                                                 "_ZN3art11ClassLinker30ShouldUseInterpreterEntrypointEPNS_9ArtMethodEPKv");
             if (shouldUseInterpreterEntrypoint != nullptr) {

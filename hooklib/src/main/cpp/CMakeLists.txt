@@ -31,6 +31,10 @@ elseif (${CMAKE_ANDROID_ARCH_ABI} STREQUAL "armeabi-v7a")
             ${nativehook_lib_path}/archs/arm/arm32/relocate/code_relocate_arm32.cpp)
 endif()
 
+add_library(cydia_substrate STATIC IMPORTED)
+set_target_properties(cydia_substrate
+        PROPERTIES IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/libs/${ANDROID_ABI}/libcydia-substrate.a)
+
 set(${PROJECT_NAME}_SOURCES
         sandhook.cpp
         trampoline/trampoline.cpp
@@ -91,4 +95,4 @@ add_library(${PROJECT_NAME}
         SHARED
         ${${PROJECT_NAME}_SOURCES})
 
-target_link_libraries(${PROJECT_NAME} log)
+target_link_libraries(${PROJECT_NAME} log cydia_substrate)
