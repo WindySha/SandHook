@@ -12,12 +12,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 8
+      - name: Set up JDK 17 for Android SDK
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "8"
-          cache: gradle
+          java-version: "17"
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
@@ -35,6 +34,13 @@ jobs:
         run: |
           echo "sdk.dir=$ANDROID_SDK_ROOT" >> local.properties
           echo "ndk.dir=$ANDROID_SDK_ROOT/ndk/20.1.5948944" >> local.properties
+
+      - name: Set up JDK 8 for Gradle
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "8"
+          cache: gradle
 
       - name: Build library artifacts
         run: |
