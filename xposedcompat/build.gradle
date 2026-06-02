@@ -27,7 +27,7 @@ android {
 dependencies {
     implementation fileTree(include: ['*.jar'], dir: 'libs')
     implementation("com.linkedin.dexmaker:dexmaker:2.28.6")
-    compileOnly("com.jakewharton.android.repackaged:dalvik-dx:16.0.1")
+    compileOnly("com.jakewharton.android.repackaged:dalvik-dx:9.0.0_r3")
     compileOnly project(':hooklib')
 }
 
