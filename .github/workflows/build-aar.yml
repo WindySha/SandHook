@@ -2,7 +2,17 @@ name: Build AAR
 
 on:
   push:
+    branches:
+      - "**"
+    tags:
+      - "v*"
   pull_request:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -11,6 +21,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || github.ref }}
 
       - name: Set up JDK 17 for Android SDK
         uses: actions/setup-java@v4
@@ -52,7 +64,27 @@ jobs:
             :nativehook:assembleRelease \
             --stacktrace
 
+      - name: Prepare release assets
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'release'
+        run: |
+          mkdir -p release-assets
+          cp annotation/build/libs/annotation.jar release-assets/annotation.jar
+          cp hooklib/build/outputs/aar/hooklib-release.aar release-assets/hooklib.aar
+          cp xposedcompat/build/outputs/aar/xposedcompat-release.aar release-assets/xposedcompat.aar
+          cp nativehook/build/outputs/aar/nativehook-release.aar release-assets/nativehook.aar
+
+      - name: Upload to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name || github.ref_name }}
+          files: release-assets/*
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Upload build artifacts
+        if: github.event_name != 'release' && !startsWith(github.ref, 'refs/tags/')
         uses: actions/upload-artifact@v4
         with:
           name: sandhook-artifacts
