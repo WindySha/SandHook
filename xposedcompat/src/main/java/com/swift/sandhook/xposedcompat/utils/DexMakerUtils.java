@@ -1,4 +1,5 @@
 package com.swift.sandhook.xposedcompat.utils;
+
 import com.android.dx.Code;
 import com.android.dx.Local;
 import com.android.dx.TypeId;
@@ -20,8 +21,45 @@ import java.util.Map;
 
 public class DexMakerUtils {
 
+    private static volatile Method addInstMethod;
+    private static volatile Method specMethod;
 
-    private static volatile Method addInstMethod, specMethod;
+    public static void moveException(Code code, Local<?> result) {
+        addInstruction(code, new PlainInsn(Rops.opMoveException(Type.THROWABLE),
+                SourcePosition.NO_INFO, spec(result), RegisterSpecList.EMPTY));
+    }
+
+    private static void addInstruction(Code code, Insn insn) {
+        if (addInstMethod == null) {
+            try {
+                addInstMethod = Code.class.getDeclaredMethod("addInstruction", Insn.class);
+                addInstMethod.setAccessible(true);
+            } catch (NoSuchMethodException e) {
+                throw new IllegalStateException("DexMaker Code.addInstruction not found", e);
+            }
+        }
+        try {
+            addInstMethod.invoke(code, insn);
+        } catch (IllegalAccessException | InvocationTargetException e) {
+            throw new IllegalStateException("Failed to add instruction to DexMaker Code", e);
+        }
+    }
+
+    private static RegisterSpec spec(Local<?> result) {
+        if (specMethod == null) {
+            try {
+                specMethod = Local.class.getDeclaredMethod("spec");
+                specMethod.setAccessible(true);
+            } catch (NoSuchMethodException e) {
+                throw new IllegalStateException("DexMaker Local.spec not found", e);
+            }
+        }
+        try {
+            return (RegisterSpec) specMethod.invoke(result);
+        } catch (IllegalAccessException | InvocationTargetException e) {
+            throw new IllegalStateException("Failed to read DexMaker Local spec", e);
+        }
+    }
 
     public static void autoBoxIfNecessary(Code code, Local<Object> target, Local source) {
         String boxMethod = "valueOf";
@@ -143,18 +181,16 @@ public class DexMakerUtils {
         Local<Object> shortObjLocal = code.newLocal(TypeId.get("Ljava/lang/Short;"));
         Local<Object> voidObjLocal = code.newLocal(TypeId.get("Ljava/lang/Void;"));
 
-        // backup need initialized locals
         code.loadConstant(booleanLocal, false);
         code.loadConstant(byteLocal, (byte) 0);
         code.loadConstant(charLocal, '\0');
-        code.loadConstant(doubleLocal,0.0);
-        code.loadConstant(floatLocal,0.0f);
+        code.loadConstant(doubleLocal, 0.0);
+        code.loadConstant(floatLocal, 0.0f);
         code.loadConstant(intLocal, 0);
         code.loadConstant(longLocal, 0L);
         code.loadConstant(shortLocal, (short) 0);
         code.loadConstant(voidLocal, null);
         code.loadConstant(objectLocal, null);
-        // all to null
         code.loadConstant(booleanObjLocal, null);
         code.loadConstant(byteObjLocal, null);
         code.loadConstant(charObjLocal, null);
@@ -164,7 +200,7 @@ public class DexMakerUtils {
         code.loadConstant(longObjLocal, null);
         code.loadConstant(shortObjLocal, null);
         code.loadConstant(voidObjLocal, null);
-        // package all
+
         resultMap.put(TypeId.BOOLEAN, booleanLocal);
         resultMap.put(TypeId.BYTE, byteLocal);
         resultMap.put(TypeId.CHAR, charLocal);
@@ -210,50 +246,6 @@ public class DexMakerUtils {
             return TypeId.get("Ljava/lang/Void;");
         } else {
             return typeId;
-        }
-    }
-
-    public static void returnRightValue(Code code, Class<?> returnType, Map<Class, Local> resultLocals) {
-        String unboxMethod;
-        TypeId<?> boxTypeId;
-        code.returnValue(resultLocals.get(returnType));
-    }
-
-    public static void moveException(Code code, Local<?> result) {
-        addInstruction(code, new PlainInsn(Rops.opMoveException(Type.THROWABLE),
-                SourcePosition.NO_INFO, spec(result), RegisterSpecList.EMPTY));
-    }
-
-    public static void addInstruction(Code code, Insn insn) {
-        if (addInstMethod == null) {
-            try {
-                addInstMethod = Code.class.getDeclaredMethod("addInstruction", Insn.class);
-                addInstMethod.setAccessible(true);
-            } catch (NoSuchMethodException e) {
-                e.printStackTrace();
-            }
-        }
-        try {
-            addInstMethod.invoke(code, insn);
-        } catch (IllegalAccessException | InvocationTargetException e) {
-            e.printStackTrace();
-        }
-    }
-
-    public static RegisterSpec spec(Local<?> result) {
-        if (specMethod == null) {
-            try {
-                specMethod = Local.class.getDeclaredMethod("spec");
-                specMethod.setAccessible(true);
-            } catch (NoSuchMethodException e) {
-                e.printStackTrace();
-            }
-        }
-        try {
-            return (RegisterSpec) specMethod.invoke(result);
-        } catch (IllegalAccessException | InvocationTargetException e) {
-            e.printStackTrace();
-            return null;
         }
     }
 

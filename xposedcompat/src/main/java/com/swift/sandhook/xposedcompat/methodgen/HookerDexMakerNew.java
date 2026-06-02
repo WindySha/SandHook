@@ -13,6 +13,7 @@ import com.swift.sandhook.SandHook;
 import com.swift.sandhook.SandHookConfig;
 import com.swift.sandhook.wrapper.HookWrapper;
 import com.swift.sandhook.xposedcompat.hookstub.HookStubManager;
+import com.swift.sandhook.xposedcompat.utils.DexMakerHelper;
 
 import java.io.File;
 import java.io.IOException;
@@ -152,7 +153,7 @@ public class HookerDexMakerNew implements HookMaker {
         HookWrapper.HookEntity hookEntity = null;
         //try load cache first
         try {
-            ClassLoader loader = mDexMaker.loadClassDirect(mAppClassLoader, new File(mDexDirPath), dexName);
+            ClassLoader loader = DexMakerHelper.loadClassDirect(mAppClassLoader, new File(mDexDirPath), dexName);
             if (loader != null) {
                 hookEntity = loadHookerClass(loader, className);
             }
@@ -183,7 +184,7 @@ public class HookerDexMakerNew implements HookMaker {
         } else {
             // Create the dex file and load it.
             try {
-                loader = mDexMaker.generateAndLoad(mAppClassLoader, new File(mDexDirPath), dexName);
+                loader = DexMakerHelper.generateAndLoad(mDexMaker, mAppClassLoader, new File(mDexDirPath), dexName);
             } catch (IOException e) {
                 //can not write file
                 if (SandHookConfig.SDK_INT >= Build.VERSION_CODES.O) {

@@ -18,6 +18,7 @@ import com.swift.sandhook.SandHookMethodResolver;
 import com.swift.sandhook.wrapper.HookWrapper;
 import com.swift.sandhook.xposedcompat.XposedCompat;
 import com.swift.sandhook.xposedcompat.utils.DexLog;
+import com.swift.sandhook.xposedcompat.utils.DexMakerHelper;
 
 import java.io.File;
 import java.io.IOException;
@@ -37,6 +38,7 @@ import static com.swift.sandhook.xposedcompat.utils.DexMakerUtils.autoBoxIfNeces
 import static com.swift.sandhook.xposedcompat.utils.DexMakerUtils.autoUnboxIfNecessary;
 import static com.swift.sandhook.xposedcompat.utils.DexMakerUtils.createResultLocals;
 import static com.swift.sandhook.xposedcompat.utils.DexMakerUtils.getObjTypeIdIfPrimitive;
+import static com.swift.sandhook.xposedcompat.utils.DexMakerUtils.moveException;
 
 public class HookerDexMaker implements HookMaker {
 
@@ -192,7 +194,7 @@ public class HookerDexMaker implements HookMaker {
         HookWrapper.HookEntity hookEntity = null;
         //try load cache first
         try {
-            ClassLoader loader = mDexMaker.loadClassDirect(mAppClassLoader, new File(mDexDirPath), dexName);
+            ClassLoader loader = DexMakerHelper.loadClassDirect(mAppClassLoader, new File(mDexDirPath), dexName);
             if (loader != null) {
                 hookEntity = loadHookerClass(loader, className);
             }
@@ -230,7 +232,7 @@ public class HookerDexMaker implements HookMaker {
         } else {
             // Create the dex file and load it.
             try {
-                loader = mDexMaker.generateAndLoad(mAppClassLoader, new File(mDexDirPath), dexName);
+                loader = DexMakerHelper.generateAndLoad(mDexMaker, mAppClassLoader, new File(mDexDirPath), dexName);
             } catch (IOException e) {
                 //can not write file
                 if (SandHookConfig.SDK_INT >= Build.VERSION_CODES.O) {
@@ -575,7 +577,7 @@ public class HookerDexMaker implements HookMaker {
 
         // start of catch
         code.mark(tryBeforeCatch);
-        code.moveException(throwable);
+        moveException(code, throwable);
         code.invokeStatic(logThrowableMethodId, null, throwable);
         code.invokeVirtual(setResultMethodId, null, param, nullObj);
         code.loadConstant(returnEarly, false);
@@ -632,7 +634,7 @@ public class HookerDexMaker implements HookMaker {
         code.removeCatchClause(throwableTypeId);
         // catch
         code.mark(tryOrigCatch);
-        code.moveException(throwable);
+        moveException(code, throwable);
         // exception occurred when calling backup, save throwable to param
         code.invokeVirtual(setThrowableMethodId, null, param, throwable);
 
@@ -655,7 +657,7 @@ public class HookerDexMaker implements HookMaker {
         code.removeCatchClause(throwableTypeId);
         // catch
         code.mark(tryAfterCatch);
-        code.moveException(throwable);
+        moveException(code, throwable);
         code.invokeStatic(logThrowableMethodId, null, throwable);
         // if lastThrowable == null, go to recover lastResult
         code.compareZ(Comparison.EQ, noBackupThrowable, lastThrowable);
