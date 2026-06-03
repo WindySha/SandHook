@@ -18,7 +18,6 @@ import com.swift.sandhook.SandHookMethodResolver;
 import com.swift.sandhook.wrapper.HookWrapper;
 import com.swift.sandhook.xposedcompat.XposedCompat;
 import com.swift.sandhook.xposedcompat.utils.DexLog;
-import com.swift.sandhook.xposedcompat.utils.DexMakerHelper;
 
 import java.io.File;
 import java.io.IOException;
@@ -187,6 +186,7 @@ public class HookerDexMaker implements HookMaker {
         }
 
         mDexMaker = new DexMaker();
+        configureDexMakerClassLoader();
         // Generate a Hooker class.
         String className = getClassName(mMember);
         String dexName = className + ".jar";
@@ -194,11 +194,13 @@ public class HookerDexMaker implements HookMaker {
         HookWrapper.HookEntity hookEntity = null;
         //try load cache first
         try {
-            ClassLoader loader = DexMakerHelper.loadClassDirect(mAppClassLoader, new File(mDexDirPath), dexName);
+            ClassLoader loader = mDexMaker.loadClassDirect(mAppClassLoader, new File(mDexDirPath), dexName);
             if (loader != null) {
                 hookEntity = loadHookerClass(loader, className);
             }
-        } catch (Throwable throwable) {}
+        } catch (Throwable throwable) {
+            new File(mDexDirPath, dexName).delete();
+        }
 
         //do generate
         if (hookEntity == null) {
@@ -232,9 +234,14 @@ public class HookerDexMaker implements HookMaker {
         } else {
             // Create the dex file and load it.
             try {
-                loader = DexMakerHelper.generateAndLoad(mDexMaker, mAppClassLoader, new File(mDexDirPath), dexName);
+                loader = mDexMaker.generateAndLoad(mAppClassLoader, new File(mDexDirPath), dexName);
             } catch (IOException e) {
                 //can not write file
+                if (SandHookConfig.SDK_INT >= Build.VERSION_CODES.O) {
+                    byte[] dexBytes = mDexMaker.generate();
+                    loader = new InMemoryDexClassLoader(ByteBuffer.wrap(dexBytes), mAppClassLoader);
+                }
+            } catch (SecurityException e) {
                 if (SandHookConfig.SDK_INT >= Build.VERSION_CODES.O) {
                     byte[] dexBytes = mDexMaker.generate();
                     loader = new InMemoryDexClassLoader(ByteBuffer.wrap(dexBytes), mAppClassLoader);
@@ -257,6 +264,11 @@ public class HookerDexMaker implements HookMaker {
         SandHook.compileMethod(mCallBackupMethod);
         mHookClass.getMethod(METHOD_NAME_SETUP, Member.class, Method.class, XposedBridge.AdditionalHookInfo.class).invoke(null, mMember, mBackupMethod, mHookInfo);
         return new HookWrapper.HookEntity(mMember, mHookMethod, mBackupMethod);
+    }
+
+    private void configureDexMakerClassLoader() {
+        mDexMaker.setSharedClassLoader(mAppClassLoader);
+        mDexMaker.markAsTrusted();
     }
 
     private String getClassName(Member originMethod) {

@@ -476,6 +476,9 @@ public final class DexMaker {
         // Check that the file exists. If it does, return a DexClassLoader and skip all
         // the dex bytecode generation.
         if (result.exists()) {
+            if (result.canWrite()) {
+                result.setReadOnly();
+            }
             return generateClassLoader(result, dexCache, parent);
         } else {
             return null;
@@ -556,6 +559,9 @@ public final class DexMaker {
         jarOut.write(dex);
         jarOut.closeEntry();
         jarOut.close();
+        if (result.canWrite()) {
+            result.setReadOnly();
+        }
         return generateClassLoader(result, dexCache, parent);
     }
 
