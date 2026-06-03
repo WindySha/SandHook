@@ -1,3 +1,9 @@
+# DexMaker classes are embedded into this AAR; keep them when the host app enables minify.
+-keep class com.android.dx.** { *; }
+-keep class com.android.dex.** { *; }
+-dontwarn com.android.dx.**
+-dontwarn com.android.dex.**
+
 # Add project specific ProGuard rules here.
 # You can control the set of applied configuration files using the
 # proguardFiles setting in build.gradle.
